@@ -1,0 +1,63 @@
+---
+title: "snpStats"
+output: html_notebook
+---
+
+Following these documents: https://bioconductor.org/packages/release/bioc/manuals/snpStats/man/snpStats.pdf and https://www.bioconductor.org/packages/release/bioc/vignettes/chopsticks/inst/doc/chopsticks-vignette.pdf mostly
+
+Installing packages
+
+```{r}
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("snpStats")
+```
+
+Loading data, loading phenotype information (cases (1) are the survivors and immune responders and control (0) are non-survivors), running snp tests of association
+
+```{r}
+library(snpStats)
+
+data<-read.plink("wholegenomevariants_updatedfamphenovarID.bed", sep = ".", na.strings = c("0", "-9"), select.subjects = NULL, select.snps = NULL) 
+
+pheno<-read.csv("snpstatsphenotypes.csv",row.names=1)
+pheno<-as.data.frame(pheno)
+
+results<-single.snp.tests(phenotype,snp.data=snpmatrix,data=pheno,score=T)
+                          
+
+
+```
+
+Looking at the test results, making a data frame of all SNPs and their p-values, removing SNPs with p>0.05, exporting as a .txt file
+
+```{r}
+chi.squared(x=results, df=1)
+deg.freedom(results)
+effect<-as.data.frame(effect.sign(x=results))
+p.value(x=results, df=1) 
+
+signifp<-as.data.frame(p.value(x=results,df=1))
+
+library(dplyr)
+signifp<-signifp%>%
+  mutate(pvalue=p.value(x = results, df = 1))%>%
+  select(2)%>%
+  filter(pvalue<0.05)
+
+snpassoc<-cbind(effect,signifp)
+
+snpassoc<-snpassoc%>%
+  mutate(effect=effect.sign(x = results))%>%
+  select(c(1,2))%>%
+  filter(pvalue<0.05)
+
+write.table(snpassoc, "significantsnps.txt")
+
+sample.size(x=results)
+effective.sample.size(x=results)
+
+```
+
+

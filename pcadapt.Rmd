@@ -1,0 +1,205 @@
+---
+title: "pcadapt"
+output: html_notebook
+---
+
+Following: https://bcm-uga.github.io/pcadapt/articles/pcadapt.html 
+
+Looking for outliers throughout the whole genome .bed files of each group (non-survivors and survivors and immune responders)
+
+Non-survivors:
+
+```{r}
+library(pcadapt)
+
+path_to_file <- "C:/Users/evain/OneDrive - Queen's University/university/537/Population diversity analyses/NSvariants.bed"
+
+
+ndata<-read.pcadapt(path_to_file, type = "bed")
+x <- pcadapt(input = ndata, K=4) 
+x
+
+#screeplot says first 2 PCs are best-or also 3 and 4? -retain pcs to left of straight line according to cattells rule
+plot(x, option = "screeplot")
+
+#making x have optimal number if PCS (2?)- rename to y
+y<- pcadapt(input=ndata, K = 2)
+summary(y)
+y$pvalues
+
+
+#score plot with first 2 PCs
+plot(y, option = "scores")
+
+#with PC 3 and 4
+plot(x, i = 3, j = 4, option = "scores")
+
+
+#manhattan plot
+
+plot(y , option = "manhattan")
+
+#qq plot- try with x and y
+
+plot(y, option = "qqplot")
+
+#x seems to look a bit better? 
+
+#if (!require("BiocManager", quietly = TRUE))
+    #install.packages("BiocManager")
+
+BiocManager::install("qvalue")
+
+library(qvalue)
+qval <- qvalue(y$pvalues)$qvalues
+alpha <- 0.05
+Noutliers <- which(qval < alpha)
+length(NSoutliers)
+NSoutliers<-outliers
+
+#padj <- p.adjust(y$pvalues) #,method="bonferroni")- redoing with no bf correction as of 3/12
+#alpha <- 0.05
+#outliers <- which(padj < alpha)
+#length(outliers)
+
+#length(qval)
+
+#print(NSoutliers)
+
+NSoutliers<-as.data.frame(NSoutliers)
+#NSoutliers
+write.csv(NSoutliers,file="NSoutliers_nocorrection.csv")
+#outliers
+
+#cat(NSoutliers)
+```
+
+Survivors and immune responders:
+
+```{r}
+library(pcadapt)
+
+path_to_file <- "C:/Users/evain/OneDrive - Queen's University/university/537/Population diversity analyses/SIRvariants.bed"
+
+
+sdata<-read.pcadapt(path_to_file, type = "bed")
+x <- pcadapt(input = sdata, K=4) 
+#x
+
+#screeplot says first 2 PCs are best-or also 3 and 4? -retain pcs to left of straight line according to cattells rule
+plot(x, option = "screeplot")
+
+#making x have optimal number if PCS (2?)- rename to y
+y<- pcadapt(input=data, K = 2)
+summary(y)
+y$pvalues
+
+
+#score plot with first 2 PCs
+plot(y, option = "scores")
+
+#with PC 3 and 4
+plot(x, i = 3, j = 4, option = "scores")
+
+
+#manhattan plot
+
+plot(y , option = "manhattan")
+
+#qq plot- try with x and y
+
+plot(y, option = "qqplot")
+
+#x seems to look a bit better? 
+
+#if (!require("BiocManager", quietly = TRUE))
+    #install.packages("BiocManager")
+
+BiocManager::install("qvalue")
+
+library(qvalue)
+qval <- qvalue(y$pvalues)$qvalues
+alpha <- 0.05
+SIRoutliers <- which(qval < alpha)
+length(SIRoutliers)
+
+SIRoutliers<-as.data.frame(SIRoutliers)
+SIRoutliers
+write.csv(SIRoutliers,file="SIRoutliers_nocorrection.csv")
+
+```
+
+
+LD thinning?
+path_to_file <- system.file("extdata", "SSMPG2017.rds", package = "pcadapt")
+genotypes <- readRDS(path_to_file)
+matrix <- read.pcadapt(genotypes, type = "pcadapt")
+res <- pcadapt(matrix, K = 20)
+plot(res, option = "screeplot")
+```{r}
+res<-pcadapt(sdata,K=4)
+plot(res, option = "screeplot")
+
+res <- pcadapt(sdata, K = 2)
+plot(res)
+
+par(mfrow = c(2, 2))
+for (i in 1:2)
+  plot(res$loadings[, i], pch = 19, cex = .3, ylab = paste0("Loadings PC", i)) #very clustered. LD might be an issue
+
+#thinning survivors
+
+res <- pcadapt(sdata, K = 10, LD.clumping = list(size = 200, thr = 0.1))
+plot(res, option = "screeplot")
+
+res <- pcadapt(sdata, K = 2, LD.clumping = list(size = 200, thr = 0.1))
+par(mfrow = c(1, 2))
+for (i in 1:2)
+  plot(res$loadings[, i], pch = 19, cex = .3, ylab = paste0("Loadings PC", i))
+
+plot(res)
+
+qval <- qvalue(res$pvalues)$qvalues
+alpha <- 0.05
+SIRoutliersthinned <- which(qval < alpha)
+length(SIRoutliersthinned)
+
+SIRoutliersthinned<-as.data.frame(SIRoutliersthinned)
+
+write.csv(SIRoutliersthinned,file="SIRoutliers_nocorrection_thinned.csv")
+```
+
+nonsurvivors
+
+```{r}
+non<-pcadapt(ndata,K=4)
+plot(non, option = "screeplot")
+
+
+
+par(mfrow = c(2, 2))
+for (i in 1:2)
+  plot(non$loadings[, i], pch = 19, cex = .3, ylab = paste0("Loadings PC", i)) #very clustered. LD might be an issue
+
+#thinning nonsurvivors
+
+non <- pcadapt(ndata, K = 5, LD.clumping = list(size = 200, thr = 0.1))
+plot(non, option = "screeplot")
+
+non <- pcadapt(ndata, K = 2, LD.clumping = list(size = 200, thr = 0.1))
+par(mfrow = c(1, 2))
+for (i in 1:2)
+  plot(res$loadings[, i], pch = 19, cex = .3, ylab = paste0("Loadings PC", i))
+
+plot(non)
+
+qval <- qvalue(non$pvalues)$qvalues
+alpha <- 0.05
+NSoutliersthinned <- which(qval < alpha)
+length(NSoutliersthinned)
+
+NSoutliersthinned<-as.data.frame(NSoutliersthinned)
+
+write.csv(NSoutliersthinned,file="NSoutliers_nocorrection_thinned.csv")
+```
+

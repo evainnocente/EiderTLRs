@@ -1,0 +1,103 @@
+---
+title: "TLR Variation"
+author: "Eva Burguete-Innocente"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+Calculating genome-wide heterozygosity
+
+Load required packages: 
+
+```{r}
+library(pegas)
+library(dartR)
+library(vcfR)
+library(adegenet) 
+```
+
+Read in phased .vcf file containing all individuals and convert to genlight object.
+
+```{r}
+data<-read.vcfR("filename.vcf.gz") 
+
+genlight.obj<-vcfR2genlight(data)
+
+```
+
+
+Insert population stratification for comparison purposes
+
+```{r}
+
+populationdata<-read.csv("file.csv") #contains two columns: ind (every individual) and pop (the population they belong to)
+strata(genlight.obj) <- populationdata
+setPop(genlight.obj) <- ~pop/ind
+
+#calculate observed and expected heterozygosity for the whole genome
+
+genlight.obj<-gl.compliance.check(genlight.obj) #checks and fixes file if needed
+
+#calculating heterozygosity
+
+gl.report.heterozygosity(genlight.obj,method='pop',plot.out=TRUE) #can convert to dataframe and add disease outcome information for further analyses
+
+```
+
+
+
+TLR heterozygosity:
+
+Read in .vcf files containing variants for each gene and convert to genind objects.
+
+```{r}
+
+tlr<-read.vcfR("TLR.vcf",verbose=TRUE) 
+
+tlr<-vcfR2genind(tlr)
+
+```
+
+Insert population information and use summary function, subsetting for population, to calculate observed and expected heterozygosity.
+
+```{r}
+#insert population strata into all of them?
+populationdata<-read.csv("file.csv")
+
+strata(tlr) <- populationdata
+setPop(tlr) <- ~pop
+
+summary(tlr[pop="population1"])
+summary(tlr[pop="population2"])
+
+```
+
+
+PCA of allele frequencies for all genes
+
+Read in .vcf, convert to genind, insert population information, scale allele frequencies, run PCA, plot PCA
+
+```{r}
+#concatenate .vcf files of each gene into one
+allgenes<-read.vcfR("allgenes.vcf",verbose=FALSE)
+allgenes<-vcfR2genind(allgenes)
+
+#add same population information as before
+strata(allgenes) <- populationdata
+setPop(allgenes) <- ~pop
+
+#scale SNP allele frequencies- centring and replacing NAs with the mean
+
+scaledgenes<-scaleGen(allgenes,NA.method="mean")
+
+pca <- dudi.pca(scaledgenes,cent=FALSE,scale=FALSE,scannf=FALSE,nf=3) #disable scaling in pca since it's been done already, and calculate th top 3 principal components
+
+#colours for points
+col <-c("population1" =  "cyan4", "population2" = "darkslateblue")
+
+#plot PCA
+
+s.class(pca$li, pop(allgenes),xax=1,yax=2,col=col, axesell=F, cstar=0, cpoint=2, grid=T)
+```
+

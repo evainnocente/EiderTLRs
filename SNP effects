@@ -1,0 +1,66 @@
+## SNP effects
+# I used SnpEff to evaluate the numbers of SNPs in genes of interest and their effects, following this tutorial: https://www.youtube.com/watch?v=-rmreyRAbkE
+
+## Split the whole population .vcf file with the called SNPs into individuals, filter .vcf files individually, then merge them into populations.
+
+# Split
+#!/bin/bash
+
+module load bcftools
+
+for file in filename.vcf.gz; do
+  for sample in `bcftools query -l $file`; do
+    bcftools view -Oz -s $sample -o ${file/.vcf*/.$sample.vcf.gz} $file
+  done
+done
+
+# Filter
+#!/bin/bash
+
+module load vcftools
+
+for file in *.vcf.gz; do
+vcftools --gzvcf $file --minDP 5 --maxDP 200 --max-missing 0.9 --maf 0.05 --minQ 20 --remove-indels --remove-filtered-all --recode --recode-INFO-all --out ${file}_filtered
+done
+
+# Merge into groups
+#!/bin/bash
+
+module load bcftools
+
+bcftools merge --file-list ./filelist.txt -Oz -o merged_filename.vcf.gz
+
+
+## Copy the SnpEff config file to your own folder
+cp path/to/snpeff/snpEff.config
+
+## Edit the snpEff.config in order to build a custom database
+
+# edit snpEff.config
+nano snpEff.config
+# go to beneath Non-standard databases
+ #comment organism name:
+
+## Organism name
+reference.genome : Organism name
+
+#where reference is the name of the folder where you have your sequences.fa and genes.gff annotation file
+
+#save changes
+
+## Build your database
+
+module load snpeff/5.0 #this will also load the relevant java module
+java -jar $EBROOTSNPEFF/snpEff.jar build -gff3 -v foldername #where -v is your folder with sequence files
+#-gff3 for gff annotation files and -gtf22 for .gtf
+
+## Run SnpEff
+
+#!/bin/bash
+
+module load snpeff/5.0
+java -jar $EBROOTSNPEFF/snpEff.jar databasename vcfs/merged_filename.vcf.gz > filename_snpeff.ann.vcf
+
+## Be sure to rename SnpEff output summary files or they will get overwritten.
+ 
+

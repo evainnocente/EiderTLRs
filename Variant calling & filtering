@@ -1,0 +1,104 @@
+## Called SNPs by comparing all files to the reference genome with bcftools mpileup
+
+#!/bin/bash
+
+module load samtools
+module load bcftools
+
+SAMPLELIST="../01-trim_qc/x${SLURM_ARRAY_TASK_ID}.fl"
+
+for SAMPLE in `cat $SAMPLELIST`; do
+
+
+bcftools mpileup -a AD,ADF,DP,ADR,SP -Ou -f ../ref_genome/ref_genome.fa ./sorted/${SAMPLE}_sorted_minq20.bam | bcftools call --threads 8 -mv -Oz -f GQ -o ./GQmpileup/${SAMPLE}.vcf
+
+done
+
+## Filtered the files all together with VCFtools filter
+
+#!/bin/bash
+
+module load vcftools
+
+vcftools --vcf filename.vcf --minDP 5 --maxDP 200 --max-missing 0.9 --maf 0.05 --minQ 20 --remove-indels --remove-filtered-all --recode --recode-INFO-all --out filtered_filename
+
+
+## Reheader samples in .vcf file to correct sample names with bcftools reheader
+
+#!/bin/bash
+
+module load bcftools
+
+bcftools reheader -s filelist.txt filtered_filename.vcf -o reheadered_filtered_filename.vcf
+
+
+## Sort and index the population .vcf file with bcftools sort and bcftools index
+
+#!/bin/bash
+
+module load samtools
+module load bcftools
+
+
+bcftools sort reheadered_filtered_filename.vcf -Oz z -o reheadered_filtered_filename_sorted.vcf.gz
+bcftools index -t reheadered_filtered_filename_sorted.vcf.gz
+
+
+## Phase haplotypes of the whole population file with Beagle
+
+#!/bin/bash
+
+module load beagle/5.4
+java -Xmx100g -jar ${EBROOTBEAGLE}/beagle.22Jul22.46e.jar
+java -Xmx100g -jar ${EBROOTBEAGLE}/beagle.22Jul22.46e.jar gt=reheadered_filtered_filename_sorted.vcf.gz window=300 excludemarkers=./markers.txt impute=false out=phased_filename
+
+
+## Split population file into indvidual .vcf files
+
+#!/bin/bash
+
+module load bcftools
+
+for file in phased_filename.vcf.gz; do
+  for sample in `bcftools query -l $file`; do
+    bcftools view -Oz -s $sample -o ${file/.vcf*/.$sample.vcf.gz} $file
+  done
+done
+
+
+## Merge individual .vcf files into two separate groups (non-survivors vs. survivors & immune responders) for comparison with bcftools merge
+
+#!/bin/bash
+
+
+module load bcftools
+
+bcftools merge --file-list ./filelist.txt -Oz -o merged_populationfile.vcf.gz
+
+
+## Create consensus sequences based on the reference genome, and output a mega file containing both haplotypes for further analysis, using samtools faidx and bcftools consensus. Code adapted from Magid et al. (2022). 
+
+#!/bin/bash
+
+
+module load samtools
+module load bcftools
+
+counter=1 #counter adds unique number labels to each individual for MEGA format
+
+
+echo "#MEGA" > tlr_haplotypes.meg
+#for loop to output haplotypes for each individual bam file within the final vcf for one TLR region
+for file in *.bam #loop through the population bam files
+do
+base=$(basename $file.bam)
+echo "#"${counter}"-1" >> tlr_haplotypes.meg
+#outputs sequence for phased haplotype 1 for one individual
+samtools faidx reference.genome.fa chr:1-2 | bcftools consensus phased_filename.vcf.gz -s $base -M N -H 1pIu >> tlr_haplotypes.meg
+echo "#"${counter}"-2" >> tlr_haplotypes.meg
+#outputs sequence for phased haplotype 2 for one individual
+samtools faidx referencegenome.fa chr:1-2 | bcftools consensus phased_filename.vcf.gz -s $base -M N -H 2pIu >> tlr_haplotypes.meg
+counter=$(($counter+1))
+done
+
+## .meg files with haplotype sequences were imported into DNAsp for analysis of haplotype diversity, nucleotide diversity, and Tajima's D, using the "DNA Polymorphism" and "Tajima's Test" commands.

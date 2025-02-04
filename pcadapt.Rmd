@@ -57,7 +57,7 @@ Noutliers <- which(qval < alpha)
 length(NSoutliers)
 NSoutliers<-outliers
 
-#padj <- p.adjust(y$pvalues) #,method="bonferroni")- redoing with no bf correction as of 3/12
+#padj <- p.adjust(y$pvalues) # no correction needed
 #alpha <- 0.05
 #outliers <- which(padj < alpha)
 #length(outliers)
@@ -130,12 +130,8 @@ write.csv(SIRoutliers,file="SIRoutliers_nocorrection.csv")
 ```
 
 
-LD thinning?
-path_to_file <- system.file("extdata", "SSMPG2017.rds", package = "pcadapt")
-genotypes <- readRDS(path_to_file)
-matrix <- read.pcadapt(genotypes, type = "pcadapt")
-res <- pcadapt(matrix, K = 20)
-plot(res, option = "screeplot")
+Linkage disequlibrium thinning
+
 ```{r}
 res<-pcadapt(sdata,K=4)
 plot(res, option = "screeplot")

@@ -54,12 +54,12 @@ module load snpeff/5.0 #this will also load the relevant java module
 java -jar $EBROOTSNPEFF/snpEff.jar build -gff3 -v foldername #where -v is your folder with sequence files
 #-gff3 for gff annotation files and -gtf22 for .gtf
 
-## Run SnpEff
+## Run SnpEff- without including upstream and downstream variants
 
 #!/bin/bash
 
 module load snpeff/5.0
-java -jar $EBROOTSNPEFF/snpEff.jar databasename vcfs/merged_filename.vcf.gz > filename_snpeff.ann.vcf
+java -jar $EBROOTSNPEFF/snpEff.jar -ud 0 databasename vcfs/merged_filename.vcf.gz > filename_snpeff.ann.vcf
 
 ## Be sure to rename SnpEff output summary files or they will get overwritten.
  

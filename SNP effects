@@ -51,8 +51,10 @@ reference.genome : Organism name
 ## Build your database
 
 module load snpeff/5.0 #this will also load the relevant java module
-java -jar $EBROOTSNPEFF/snpEff.jar build -gff3 -v foldername #where -v is your folder with sequence files
+java -jar $EBROOTSNPEFF/snpEff.jar build -gff3 -v foldername java -jar -noCheckCds -noCheckProtein
+ #where -v is your folder with sequence files
 #-gff3 for gff annotation files and -gtf22 for .gtf
+# no check CDs and protein because we do not have CDS and protein information
 
 ## Run SnpEff- without including upstream and downstream variants
 

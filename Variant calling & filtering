@@ -5,14 +5,15 @@
 module load samtools
 module load bcftools
 
-SAMPLELIST="../01-trim_qc/x${SLURM_ARRAY_TASK_ID}.fl"
+SAMPLELIST="./file_list2.txt"
 
 for SAMPLE in `cat $SAMPLELIST`; do
 
 
-bcftools mpileup -a AD,ADF,DP,ADR,SP -Ou -f ../ref_genome/ref_genome.fa ./sorted/${SAMPLE}_sorted_minq20.bam | bcftools call --threads 8 -mv -Oz -f GQ -o ./GQmpileup/${SAMPLE}.vcf
+bcftools mpileup -a AD,ADF,DP,ADR,SP -Ou -f ../ref_genome/sequences.fa ./${SAMPLE}_trimmed_sorted_minq20.bam | bcftools call --threads 16 -mv -Oz -f GQ -o ./mpileup/${SAMPLE}.vcf
 
 done
+
 
 ## Filtered the files all together with VCFtools filter
 
@@ -102,3 +103,8 @@ counter=$(($counter+1))
 done
 
 ## .meg files with haplotype sequences were imported into DNAsp for analysis of haplotype diversity, nucleotide diversity, and Tajima's D, using the "DNA Polymorphism" and "Tajima's Test" commands.
+
+## Linkage disequillibrium filtering
+
+plink --allow-extra-chr --double-id --bfile merged --indep-pairwise 50 10 0.2 --out merged_LD
+##

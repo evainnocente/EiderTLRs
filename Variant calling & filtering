@@ -47,11 +47,22 @@ bcftools index -t reheadered_filtered_filename_sorted.vcf.gz
 
 ## Phase haplotypes of the whole population file with Beagle
 
+# Filter out scaffolds with 2 SNPs or less
+
+bcftools query -f '%CHROM\n' reheadered_filtered_sorted_coeiepizootic.vcf.gz \
+  | sort | uniq -c | awk '$1 >= 2 {print $2}' > keep_scaffolds.txt
+
+bcftools view -t $(paste -sd, keep_scaffolds.txt) \
+  reheadered_filtered_sorted_coeiepizootic.vcf.gz \
+  -Oz -o filtered_for_beagle.vcf.gz
+
+tabix -p vcf filtered_for_beagle.vcf.gz
+
 #!/bin/bash
 
 module load beagle/5.4
 java -Xmx100g -jar ${EBROOTBEAGLE}/beagle.22Jul22.46e.jar
-java -Xmx100g -jar ${EBROOTBEAGLE}/beagle.22Jul22.46e.jar gt=reheadered_filtered_filename_sorted.vcf.gz window=300 excludemarkers=./markers.txt impute=false out=phased_filename
+java -Xmx100g -jar ${EBROOTBEAGLE}/beagle.22Jul22.46e.jar gt=filtered_for_beagle.vcf.gz window=300 excludemarkers=./markers.txt impute=false out=phased_filename
 
 
 ## Split population file into indvidual .vcf files

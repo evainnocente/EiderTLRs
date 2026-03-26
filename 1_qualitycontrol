@@ -40,6 +40,13 @@ ls ./*.fastq.gz -1 | xargs -n 8 fastqc -o ./trimmed_reports
 
 ##Align sequences to the reference genome using BWA
 
+# Index the reference genome
+module load bwa
+
+cd ./scratch/refgenome
+
+bwa index ref_genome.fa
+
 module load bwa
 module load samblaster
 module load samtools

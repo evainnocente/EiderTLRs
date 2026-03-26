@@ -88,39 +88,3 @@ write.csv(het_by_pop, "per_individual_heterozygosity.csv", row.names = FALSE)
 write.csv(pop_summary, "population_heterozygosity_summary.csv", row.names = FALSE)
 
 cat("✅ Heterozygosity calculations complete!\n")
-
-
-## Genome-wide per individual pi
-
-library(vcfR)
-
-vcf <- read.vcfR("phased_reheadered_filtered_joint_call_sorted.vcf.gz")
-
-gt <- extract.gt(
-  vcf,
-  element = "GT",
-  as.numeric = FALSE,
-  return.alleles = FALSE
-)
-
-str(gt)
-dim(gt)
-
-het <- colSums(gt == "0|1" | 
-                 gt == "1|0" | 
-                 gt == "0/1" | 
-                 gt == "1/0")
-callable <- colSums(!is.na(gt) & !(gt %in% c("./.","./", ".|.", "./|.")))
-
-pi_ind <- het / callable
-pi_ind
-
-samples <- colnames(gt)
-
-df_pi <- data.frame(
-  Sample = samples,
-  Heterozygosity = het,
-  Callable_Sites = callable,
-  Pi = pi_ind
-)
-write.csv(df_pi, "individual_pi_values.csv", row.names = FALSE)

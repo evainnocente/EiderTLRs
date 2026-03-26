@@ -1,0 +1,3 @@
+## Calculate nucleotide diversity genome wide using vcftools
+
+vcftools --gzvcf yourvcf.vcf.gz --site-pi --out genomewidepi

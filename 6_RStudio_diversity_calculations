@@ -1,0 +1,126 @@
+# ============================================================
+#  Calculate per-individual observed and expected heterozygosity
+#  genome-wide using individual-level allele frequencies
+# ============================================================
+
+# ---- Step 0: Install & load packages ----
+# install.packages(c("vcfR", "data.table", "ggplot2")) # if not already installed
+library(vcfR)
+library(data.table)
+library(ggplot2)
+
+# ---- Step 1: Read VCF ----
+vcf <- read.vcfR("your_reheadered_filtered_sorted_phased_vcf.vcf.gz")
+
+# Convert to numeric genotype matrix: 0,1,2,NA
+gt_num <- extract.gt(vcf, element = "GT", as.numeric = TRUE)
+colnames(gt_num) <- sub("_trimmed_sorted_minq20\\.bam$", "", colnames(gt_num))
+cat("Genotype matrix dimensions (SNPs x Individuals):", dim(gt_num), "\n")
+
+# ---- Step 2: Read population info ----
+popinfo <- read.csv("pop.csv", stringsAsFactors = FALSE)
+
+# Standardize column names
+cols <- tolower(colnames(popinfo))
+if ("ind" %in% cols) colnames(popinfo)[cols == "ind"] <- "Individual"
+if ("pop" %in% cols) colnames(popinfo)[cols == "pop"] <- "Population"
+
+# Verify required columns
+if (!all(c("Individual", "Population") %in% colnames(popinfo))) {
+  stop("Population CSV must contain columns named 'Individual' and 'Population'.")
+}
+
+# Reorder popinfo to match genotype matrix
+popinfo <- popinfo[match(colnames(gt_num), popinfo$Individual), ]
+stopifnot(all(popinfo$Individual == colnames(gt_num)))
+
+# ---- Step 3: Identify populations ----
+pops <- unique(popinfo$Population)
+cat("Populations detected:", paste(pops, collapse = ", "), "\n")
+
+# ---- Step 4: Compute heterozygosity by population ----
+results <- list()
+
+for (pop in pops) {
+  message("Processing population: ", pop)
+  
+  # Select individuals in this population
+  inds <- popinfo$Individual[popinfo$Population == pop]
+  submat <- gt_num[, inds, drop = FALSE]
+  
+  # ---- Observed heterozygosity per individual ----
+  Ho_indiv <- colMeans(submat == 1, na.rm = TRUE)
+  
+  # ---- Expected heterozygosity per individual ----
+  # Each individual's He is computed from their own allele frequency (across all loci)
+  He_indiv <- sapply(seq_len(ncol(submat)), function(i) {
+    g <- submat[, i]
+    g <- g[!is.na(g)]
+    if (length(g) == 0) return(NA)
+    p_i <- mean(g / 2, na.rm = TRUE)    # individual allele frequency
+    2 * p_i * (1 - p_i)                 # expected heterozygosity from individual's own allele freq
+  })
+  
+  # ---- F per individual ----
+  F_indiv <- 1 - (Ho_indiv / He_indiv)
+  
+  # ---- Combine into data frame ----
+  results[[pop]] <- data.frame(
+    Population = pop,
+    Individual = inds,
+    Ho = Ho_indiv,
+    He = He_indiv,
+    F = F_indiv
+  )
+}
+
+# ---- Step 5: Combine all populations ----
+het_by_pop <- do.call(rbind, results)
+head(het_by_pop)
+
+# ---- Step 6: Population-level summaries ----
+pop_summary <- aggregate(cbind(Ho, He, F) ~ Population,
+                         data = het_by_pop, FUN = mean, na.rm = TRUE)
+print(pop_summary)
+
+# ---- Step 7: Save results ----
+write.csv(het_by_pop, "per_individual_heterozygosity.csv", row.names = FALSE)
+write.csv(pop_summary, "population_heterozygosity_summary.csv", row.names = FALSE)
+
+cat("✅ Heterozygosity calculations complete!\n")
+
+
+## Genome-wide per individual pi
+
+library(vcfR)
+
+vcf <- read.vcfR("phased_reheadered_filtered_joint_call_sorted.vcf.gz")
+
+gt <- extract.gt(
+  vcf,
+  element = "GT",
+  as.numeric = FALSE,
+  return.alleles = FALSE
+)
+
+str(gt)
+dim(gt)
+
+het <- colSums(gt == "0|1" | 
+                 gt == "1|0" | 
+                 gt == "0/1" | 
+                 gt == "1/0")
+callable <- colSums(!is.na(gt) & !(gt %in% c("./.","./", ".|.", "./|.")))
+
+pi_ind <- het / callable
+pi_ind
+
+samples <- colnames(gt)
+
+df_pi <- data.frame(
+  Sample = samples,
+  Heterozygosity = het,
+  Callable_Sites = callable,
+  Pi = pi_ind
+)
+write.csv(df_pi, "individual_pi_values.csv", row.names = FALSE)

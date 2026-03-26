@@ -30,3 +30,30 @@ fastp -r -w 16 -i ../00-raw/${array[0]}_R1.fastq.gz -I ../00-raw/${array[0]}_R2.
 --adapter_sequence AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC --adapter_sequence_r2 AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT \
 -h ./fastp_reps/${array[0]}.html
 done < $SAMPLELIST
+
+## Generate quality control reports using fastqc
+
+module load fastqc
+
+unalias ls
+ls ./*.fastq.gz -1 | xargs -n 8 fastqc -o ./trimmed_reports
+
+##Align sequences to the reference genome using BWA
+
+module load bwa
+module load samblaster
+module load samtools
+
+# $SLURM_ARRAY_TASK_ID is the id of the current script copy
+
+SAMPLELIST="tr_fl_${SLURM_ARRAY_TASK_ID}.txt"
+
+for SAMPLE in `cat $SAMPLELIST`; do
+
+echo "SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
+
+bwa mem -t 8 ../refgenome/ref_genome.fa ../01-adapter_trimming/${SAMPLE}_R1.fastq ../01-adapter_trimming/${SAMPLE}_R2.fastq | samblaster --removeDups | samtools view -h -b -@8 -o ./${SAMPLE}_aligned.bam
+
+done
+
+## Mapping, filtering, and sorting sequences

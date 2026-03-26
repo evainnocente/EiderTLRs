@@ -1,0 +1,164 @@
+#############################################################################################
+# Running correlation tests to determine association between disease survival and diversity #
+#############################################################################################
+# Code used in RStudio
+
+# Load necessary packages
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+# Step 1: Read in your data
+df <- read_excel("genomewide_dataframe.xlsx")
+
+# Step 2: Check data structure
+table(df$survival)     # number of survivors vs non-survivors
+summary(df$Ho)         # check heterozygosity range
+# If needed, make sure that diversity measure is recognized as numeric and survival is recognized as a factor
+df$survival <- factor(df$survival, levels = c(0,1))
+as.numeric(df$Ho)
+
+# Step 3: Run correlation tests
+cor.test(df$Ho, df$survival)
+cor.test(df$He, df$survival)
+cor.test(df$F, df$survival)
+
+# Step 4: Compute mean and 95% CI for each group
+summary_df <- df %>%
+  group_by(survival) %>%
+  summarise(
+    mean_F = mean(F),
+    sd_F = sd(F),
+    n = n(),
+    se_F = sd_F / sqrt(n),
+    ci_lower = mean_F - qt(0.975, n-1) * se_F,
+    ci_upper = mean_F + qt(0.975, n-1) * se_F
+  )
+
+# Step 5: Plot data
+
+ggplot(df, aes(x = factor(survival), y = F, color = factor(survival))) +
+  geom_boxplot(alpha = 0.3, outlier.shape = NA, fill = c("grey30", "darkgrey")) +      # semi-transparent boxplot
+  geom_jitter(width = 0.2, size = 2, alpha = 0.7) +    # individual points
+  geom_point(data = summary_df, aes(x = factor(survival), y = mean_F), 
+             color = "black", size = 3) +             # mean points
+  geom_errorbar(data = summary_df, aes(x = factor(survival), 
+                                       ymin = ci_lower, ymax = ci_upper), 
+                width = 0.1, color = "blue", size = 1) +  # 95% CI bars
+  scale_color_manual(values = c("black", "black")) +
+  scale_x_discrete(labels = c("0" = "Deceased birds", "1" = "Survivors")) +  # rename x-axis ticks
+  labs(x = NULL, y = "Inbreeding coefficient") +  # remove x-axis label, keep y-axis label
+  ylim(-0.174, -0.166) +            # limit y-axis to reduce empty space
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.line = element_line(color = "black", size = 0.8),  # add axis borders
+    panel.grid = element_blank(),                            # remove background grid
+    legend.position = "none"                                 # remove legend
+  )
+
+# Plotting all genes together
+
+# Add Gene labels and combine all into one big data frame
+df <- bind_rows(
+  TLR1A  %>% mutate(Gene = "TLR1A"),
+  TLR1B  %>% mutate(Gene = "TLR1B"),
+  TLR2a  %>% mutate(Gene = "TLR2A"),
+  TLR2B  %>% mutate(Gene = "TLR2B"),
+  TLR3   %>% mutate(Gene = "TLR3"),
+  TLR4   %>% mutate(Gene = "TLR4"),
+  TLR5   %>% mutate(Gene = "TLR5"),
+  TLR7   %>% mutate(Gene = "TLR7"),
+  TLR15  %>% mutate(Gene = "TLR15"),
+  TLR21  %>% mutate(Gene = "TLR21")
+)
+
+# Step 1: Reorder genes so TLR15 is second last, TLR21 is last
+df$Gene <- factor(df$Gene, levels = c(
+  "TLR1A", "TLR1B", "TLR2A", "TLR2B", "TLR3",
+  "TLR4", "TLR5", "TLR7", "TLR15", "TLR21"
+))
+
+# Step 2: Define coordinates for the asterisk above TLR3
+asterisk_df <- data.frame(
+  Gene = "TLR3",
+  y = max(df$He, na.rm = TRUE) + 0.001  # just above the highest He value
+)
+
+# Step 3: Plot
+ggplot() +
+  # Boxplots (now with black outlines)
+  geom_boxplot(
+    data = df,
+    aes(x = Gene, y = Ho, fill = survival),
+    alpha = 0.4,
+    outlier.shape = NA,
+    color = "black",                    # black box outlines
+    position = position_dodge(width = 0.8)
+  ) +
+  
+  # Individual points
+  geom_jitter(
+    data = df,
+    aes(x = Gene, y = He, color = survival),
+    size = 2,
+    alpha = 0.7,
+    position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.8)
+  ) +
+  
+  # Mean points
+  geom_point(
+    data = summary_df_He,
+    aes(x = Gene, y = mean_He, color = survival),
+    position = position_dodge(width = 0.8),
+    size = 3
+  ) +
+  
+  # 95% CI error bars (blue)
+  geom_errorbar(
+    data = summary_df_He,
+    aes(x = Gene, ymin = ci_lower, ymax = ci_upper, group = survival),
+    color = "blue",
+    width = 0.2,
+    position = position_dodge(width = 0.8),
+    size = 1
+  ) +
+  
+  # Asterisk for significance at TLR3
+  geom_text(
+    data = asterisk_df,
+    aes(x = Gene, y = y),
+    label = "*",
+    size = 8,
+    fontface = "bold",
+    vjust = 0
+  ) +
+  
+  # Custom colors + legend labels
+  scale_fill_manual(
+    values = c("grey30", "darkgrey"),
+    labels = c("Deceased birds", "Survivors")
+  ) +
+  scale_color_manual(
+    values = c("grey30", "darkgrey"),
+    labels = c("Deceased birds", "Survivors")
+  ) +
+  
+  # Axis formatting
+  scale_y_continuous(labels = number_format(accuracy = 0.001)) +
+  labs(
+    x = "Gene",
+    y = "Observed heterozygosity",
+    fill = "Survival status",
+    color = "Survival status"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.line = element_line(color = "black", size = 0.8),
+    panel.grid = element_blank(),
+    legend.position = "top",
+    legend.title = element_text(size = 10),
+    legend.text  = element_text(size = 9),
+    legend.justification = "center",
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )

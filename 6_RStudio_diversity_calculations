@@ -87,4 +87,67 @@ print(pop_summary)
 write.csv(het_by_pop, "per_individual_heterozygosity.csv", row.names = FALSE)
 write.csv(pop_summary, "population_heterozygosity_summary.csv", row.names = FALSE)
 
+## PCA of allele frequencies for all genes
+
+#Load required libraries
+library(pegas)
+library(dartR)
+library(vcfR)
+library(adegenet)
+
+vcf <- read.vcfR("merged_TLRs.vcf.gz", verbose = FALSE)
+allgenes <- vcfR2genind(vcf)
+
+# ---- Clean individual names from VCF/genind ----
+# Remove any extra suffixes if present
+clean_names <- sub("_trimmed_sorted_minq20\\.bam$", "", indNames(allgenes))
+
+# ---- Clean population data ----
+# Remove leading/trailing spaces in individual names
+populationdata$ind <- trimws(populationdata$ind)
+# Standardize population labels (all lowercase)
+populationdata$pop <- tolower(trimws(populationdata$pop))
+
+# ---- Match individuals to population data ----
+pop_vector <- populationdata$pop[match(clean_names, populationdata$ind)]
+
+# Check for unmatched individuals
+if(any(is.na(pop_vector))) {
+  stop("Some individuals did not match populationdata: ", 
+       paste(clean_names[is.na(pop_vector)], collapse = ", "))
+}
+
+# ---- Assign population to genind object ----
+pop(allgenes) <- factor(pop_vector,
+                        levels = c("survivors", "deceased"),
+                        labels = c("Survivors", "Deceased birds"))
+
+# Check assignment
+table(pop(allgenes))
+
+# ---- Scale SNPs for PCA ----
+scaledgenes <- scaleGen(allgenes, NA.method = "mean")
+
+# ---- PCA ----
+pca <- dudi.pca(scaledgenes, cent = FALSE, scale = FALSE, scannf = FALSE, nf = 3)
+
+# ---- Define colors ----
+col <- c("Survivors" = "grey30", "Deceased birds" = "darkgrey")
+
+# ---- Plot PCA ----
+s.class(pca$li, pop(allgenes), xax = 1, yax = 2, col = col,
+        axesell = FALSE, cstar = 0, cpoint = 2, grid = TRUE)
+
+s.class(pca$li, pop(allgenes), 
+        xax = 1, yax = 2, 
+        col = col,
+        axesell = FALSE, 
+        cstar = 0, 
+        cpoint = 2, 
+        grid = FALSE)  # remove grid lines
+
+# Add axis labels manually
+title(xlab = "PC1", ylab = "PC2")
+
+
 cat("✅ Heterozygosity calculations complete!\n")

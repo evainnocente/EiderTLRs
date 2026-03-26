@@ -1,3 +1,0 @@
-bash
-
-bcftools view -i 'INFO/ANN !~ "synonymous_variant"' input.vcf -o filtered.vcf

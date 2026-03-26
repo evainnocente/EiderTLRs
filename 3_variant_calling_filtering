@@ -86,36 +86,3 @@ done
 module load bcftools
 
 bcftools merge --file-list ./filelist.txt -Oz -o merged_populationfile.vcf.gz
-
-
-## Create consensus sequences based on the reference genome, and output a mega file containing both haplotypes for further analysis, using samtools faidx and bcftools consensus. Code adapted from Magid et al. (2022). 
-
-#!/bin/bash
-
-
-module load samtools
-module load bcftools
-
-counter=1 #counter adds unique number labels to each individual for MEGA format
-
-
-echo "#MEGA" > tlr_haplotypes.meg
-#for loop to output haplotypes for each individual bam file within the final vcf for one TLR region
-for file in *.bam #loop through the population bam files
-do
-base=$(basename $file.bam)
-echo "#"${counter}"-1" >> tlr_haplotypes.meg
-#outputs sequence for phased haplotype 1 for one individual
-samtools faidx reference.genome.fa chr:1-2 | bcftools consensus phased_filename.vcf.gz -s $base -M N -H 1pIu >> tlr_haplotypes.meg
-echo "#"${counter}"-2" >> tlr_haplotypes.meg
-#outputs sequence for phased haplotype 2 for one individual
-samtools faidx referencegenome.fa chr:1-2 | bcftools consensus phased_filename.vcf.gz -s $base -M N -H 2pIu >> tlr_haplotypes.meg
-counter=$(($counter+1))
-done
-
-## .meg files with haplotype sequences were imported into DNAsp for analysis of haplotype diversity, nucleotide diversity, and Tajima's D, using the "DNA Polymorphism" and "Tajima's Test" commands.
-
-## Linkage disequillibrium filtering
-
-plink --allow-extra-chr --double-id --bfile merged --indep-pairwise 50 10 0.2 --out merged_LD
-##

@@ -14,6 +14,12 @@ bcftools mpileup -a AD,ADF,DP,ADR,SP -Ou -f ../ref_genome/sequences.fa ./${SAMPL
 
 done
 
+## Masking low depth samples
+
+bcftools +setGT joint_calls.vcf.gz \
+-Oz -o DP3_masked.vcf.gz \
+-- -t q -n . -i 'FMT/DP<3'
+
 
 ## Filtered the files all together with VCFtools filter
 

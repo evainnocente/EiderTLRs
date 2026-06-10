@@ -67,9 +67,12 @@ tabix -p vcf filtered_for_beagle.vcf.gz
 #!/bin/bash
 
 module load beagle/5.4
-java -Xmx100g -jar ${EBROOTBEAGLE}/beagle.22Jul22.46e.jar
-java -Xmx100g -jar ${EBROOTBEAGLE}/beagle.22Jul22.46e.jar gt=filtered_for_beagle.vcf.gz window=300 impute=false out=phased_filename
 
+java -Xmx100g -jar ${EBROOTBEAGLE}/beagle.01Mar24.d36.jar \
+  gt=filtered_for_beagle.vcf.gz \
+  window=300 \
+  impute=false \
+  out=reheadered_filtered_sorted_phased_yourfile
 
 ## Split population file into indvidual .vcf files
 

@@ -5,14 +5,10 @@
 module load samtools
 module load bcftools
 
-SAMPLELIST="./file_list2.txt"
-
-for SAMPLE in `cat $SAMPLELIST`; do
-
-
-bcftools mpileup -a AD,ADF,DP,ADR,SP -Ou -f ../ref_genome/sequences.fa ./${SAMPLE}_trimmed_sorted_minq20.bam | bcftools call --threads 16 -mv -Oz -f GQ -o ./mpileup/${SAMPLE}.vcf
-
-done
+bcftools mpileup -a AD,ADF,DP,ADR,SP -Ou -f ./ref_genome/ref_genome.fa \
+    ./bam_folder/*.bam \
+  | bcftools call --threads 16 -mv -Oz -f GQ \
+    -o ./vcf_folder/all_samples.vcf.gz
 
 ## Masking low depth samples
 

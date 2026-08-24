@@ -11,7 +11,7 @@ blastn -query ./CDS.fasta -db ./ref_genome_db -out ./results.txt -outfmt "6 qseq
 tblastn -query queries.faa -db ref_genome_db \
   -out tblastn_results.txt \
   -outfmt "6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore qlen" \
-  -num_threads 4
+
 
 ## Generate fasta files from the reference genome for conducting Reciprocal Best Hit (RBH) tests
 

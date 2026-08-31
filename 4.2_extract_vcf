@@ -1,0 +1,5 @@
+module load bcftools
+
+bcftools view your_vcf.vcf.gz \
+  -r chr:start-end \
+  -O z -o output_vcf.vcf.gz

@@ -1,63 +1,169 @@
----
-title: "snpStats"
-output: html_notebook
----
+#############################################################
+# SNP association analysis with batch correction (snpStats)
+#
+# Pipeline:
+#   1. Load PLINK data, fixing duplicate SNP/sample IDs
+#   2. Load phenotype + batch data, align sample IDs
+#   3. Run batch-adjusted SNP association tests (snp.rhs.tests)
+#   4. Filter for significant SNPs (p < 0.05)
+#   5. Check which significant SNPs fall within genes of interest
+#############################################################
 
-Following these documents: https://bioconductor.org/packages/release/bioc/manuals/snpStats/man/snpStats.pdf and https://www.bioconductor.org/packages/release/bioc/vignettes/chopsticks/inst/doc/chopsticks-vignette.pdf mostly
-
-Installing packages
-
-```{r}
+## ---- 1. Install and load packages ----
 if (!require("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-
+  install.packages("BiocManager")
 BiocManager::install("snpStats")
-```
 
-Loading data, loading phenotype information (cases (1) are the survivors and immune responders and control (0) are non-survivors), running snp tests of association
-
-```{r}
 library(snpStats)
-
-data<-read.plink("wholegenomevariants_updatedfamphenovarID.bed", sep = ".", na.strings = c("0", "-9"), select.subjects = NULL, select.snps = NULL) 
-
-pheno<-read.csv("snpstatsphenotypes.csv",row.names=1)
-pheno<-as.data.frame(pheno)
-
-results<-single.snp.tests(phenotype,snp.data=snpmatrix,data=pheno,score=T)
-                          
-
-
-```
-
-Looking at the test results, making a data frame of all SNPs and their p-values, removing SNPs with p>0.05, exporting as a .txt file
-
-```{r}
-chi.squared(x=results, df=1)
-deg.freedom(results)
-effect<-as.data.frame(effect.sign(x=results))
-p.value(x=results, df=1) 
-
-signifp<-as.data.frame(p.value(x=results,df=1))
-
 library(dplyr)
-signifp<-signifp%>%
-  mutate(pvalue=p.value(x = results, df = 1))%>%
-  select(2)%>%
-  filter(pvalue<0.05)
 
-snpassoc<-cbind(effect,signifp)
 
-snpassoc<-snpassoc%>%
-  mutate(effect=effect.sign(x = results))%>%
-  select(c(1,2))%>%
-  filter(pvalue<0.05)
+## ---- 2. Fix the .bim file ----
+# Original SNP IDs (column 2) were all "." which read.plink()
+# cannot use as unique row names. Regenerate unique IDs from
+# chromosome:position:allele1:allele2.
+bim <- read.table("wholegenomevariants_updatedfamvarID.bim",
+                   header = FALSE, stringsAsFactors = FALSE)
 
-write.table(snpassoc, "significantsnps.txt")
+bim$V2 <- paste(bim$V1, bim$V4, bim$V5, bim$V6, sep = ":")
 
-sample.size(x=results)
-effective.sample.size(x=results)
+# sanity check -- should be mostly/all FALSE (i.e. unique)
+table(duplicated(bim$V2))
 
-```
+write.table(bim, "wholegenomevariants_updatedfamvarID_fixed.bim",
+            row.names = FALSE, col.names = FALSE, quote = FALSE)
 
+
+## ---- 3. Fix the .fam file ----
+# Original FID/IID columns contained periods, which broke
+# read.plink()'s internal ID-parsing (sep = "." regex collision).
+# Replace periods with underscores.
+fam <- read.table("wholegenomevariants_updatedfamvarID.fam",
+                   header = FALSE, stringsAsFactors = FALSE)
+
+fam$original_id <- fam$V1  # keep original IDs for reference
+
+fam$V1 <- gsub("\\.", "_", fam$V1)
+fam$V2 <- gsub("\\.", "_", fam$V2)
+
+write.table(fam[, 1:6], "wholegenomevariants_updatedfamvarID_fixed.fam",
+            row.names = FALSE, col.names = FALSE, quote = FALSE)
+
+
+## ---- 4. Copy .bed file to match the new fixed base name ----
+file.copy("wholegenomevariants_updatedfamvarID.bed",
+          "wholegenomevariants_updatedfamvarID_fixed.bed")
+
+
+## ---- 5. Load the fixed PLINK files ----
+data <- read.plink("wholegenomevariants_updatedfamvarID_fixed.bed",
+                    na.strings = c("0", "-9"),
+                    sep = "_",
+                    select.subjects = NULL,
+                    select.snps = NULL)
+
+snpmatrix <- data$genotypes
+
+# confirm unique sample IDs
+length(unique(rownames(snpmatrix))) == length(rownames(snpmatrix))
+
+# remove any known problem samples here, e.g.:
+# snpmatrix <- snpmatrix[rownames(snpmatrix) != "sample_31", , drop = FALSE]
+
+
+## ---- 6. Load phenotype/batch data ----
+pheno <- read.csv("snpstatsphenotypes.csv", row.names = 1,
+                   stringsAsFactors = FALSE)
+# if columns look garbled (crammed into one), the file is
+# actually tab-delimited -- use instead:
+# pheno <- read.delim("snpstatsphenotypes.csv", row.names = 1, stringsAsFactors = FALSE)
+
+pheno$batch <- as.factor(pheno$batch)
+
+
+## ---- 7. Align phenotype sample IDs to match snpmatrix ----
+rownames(pheno) <- gsub("\\.", "_", rownames(pheno))
+rownames(pheno) <- sub("_trimmed_sorted_minq20$", "", rownames(pheno))
+
+# remove matching problem samples from pheno too, e.g.:
+# pheno <- pheno[rownames(pheno) != "sample_31", , drop = FALSE]
+
+# confirm alignment
+sum(rownames(pheno) %in% rownames(snpmatrix))
+nrow(pheno)
+nrow(snpmatrix)
+
+
+## ---- 8. Run the batch-adjusted SNP association test ----
+# snp.rhs.tests() fits phenotype ~ batch + SNP_i for every SNP,
+# testing whether each SNP predicts phenotype after adjusting for batch.
+results <- snp.rhs.tests(
+  phenotype ~ batch,
+  family = "binomial",   # use "Gaussian" if phenotype is continuous
+  data = pheno,
+  snp.data = snpmatrix
+)
+
+
+## ---- 9. Extract results ----
+# results is an S4 "GlmTests" object -- SNP IDs, chi-squared
+# values, and other info are stored as slots (accessed with @),
+# not as names() on the p-value vector.
+snp_ids    <- results@snp.names
+pvals      <- p.value(results)
+chisq_vals <- results@chisq
+
+signifp <- data.frame(
+  snp_id = snp_ids,
+  pvalue = pvals,
+  chisq  = chisq_vals,
+  stringsAsFactors = FALSE
+)
+
+# keep only significant SNPs
+signifp <- signifp %>% filter(pvalue < 0.05)
+
+nrow(signifp)
+head(signifp)
+
+write.table(signifp, "significantsnps.txt", row.names = FALSE)
+
+
+## ---- 10. Check which significant SNPs fall within genes of interest ----
+
+# Genes of interest, as chr:start-end
+genes <- data.frame(
+  gene = c("TLR1A", "TLR1B", "TLR2A", "TLR2B", "TLR3-1", "TLR3-2", "TLR3-3",
+           "TLR3-4", "TLR4-1", "TLR4-2", "TLR4-3", "TLR5", "TLR7", "TLR15", "TLR21"),
+  region = c("SUPER_4:53881681-53884137", "SUPER_4:53873407-53875357",
+             "SUPER_4:32245726-32248107", "SUPER_4:32236631-32238982",
+             "SUPER_4:20103611-20103802", "SUPER_4:20100233-20102059",
+             "SUPER_4:20099425-20099652", "SUPER_18:8042591-8042695",
+             "SUPER_18:8041589-8041755", "SUPER_18:8037993-8040252",
+             "SUPER_3:95457095-95459677", "SUPER_1:77572878-77576018",
+             "SUPER_3:116327465-116330056", "SUPER_29:1579922-1582852",
+             "SUPER_4:20104648-20105088"),
+  stringsAsFactors = FALSE
+)
+
+genes$chr   <- sub(":.*", "", genes$region)
+genes$start <- as.numeric(sub(".*:(\\d+)-.*", "\\1", genes$region))
+genes$end   <- as.numeric(sub(".*-(\\d+)$", "\\1", genes$region))
+
+# parse chr:pos out of each significant SNP's ID
+signifp$chr <- sapply(strsplit(signifp$snp_id, ":"), `[`, 1)
+signifp$pos <- as.numeric(sapply(strsplit(signifp$snp_id, ":"), `[`, 2))
+
+# flag which gene (if any) each significant SNP falls inside
+signifp$in_gene <- sapply(seq_len(nrow(signifp)), function(i) {
+  hit <- genes$gene[genes$chr == signifp$chr[i] &
+                     signifp$pos[i] >= genes$start &
+                     signifp$pos[i] <= genes$end]
+  if (length(hit) > 0) paste(hit, collapse = ";") else NA
+})
+
+gene_hits <- signifp[!is.na(signifp$in_gene), ]
+gene_hits
+
+write.table(gene_hits, "significant_snps_in_genes_of_interest.txt", row.names = FALSE)
 

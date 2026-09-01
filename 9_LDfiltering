@@ -1,4 +1,0 @@
-
-## Linkage disequillibrium filtering
-
-plink --allow-extra-chr --double-id --bfile merged --indep-pairwise 50 10 0.2 --out merged_LD

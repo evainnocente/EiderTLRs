@@ -1,0 +1,214 @@
+---
+title: "pcadapt - combined deceased/survivor run"
+output: html_notebook
+---
+
+This uses the already-built LD-thinned, un-split dataset (`merged_LD_thinned`)
+so pcadapt sees both groups together. We then check which PC (if any)
+separates deceased from survivors, and run a componentwise outlier test on
+that specific axis -- rather than pcadapt's default Mahalanobis distance,
+which combines all K PCs and would mix "survival-related" structure with
+any other structure (batch, family, geography) picked up by the other PCs.
+
+No new plink step is needed -- `merged_LD_thinned.bed/.bim/.fam` from your
+original pipeline is exactly what we want here (it's the LD-pruned dataset
+containing both groups, before the --keep split).
+
+```{r}
+library(pcadapt)
+library(dplyr)
+library(readxl)
+library(tidyr)
+library(fuzzyjoin)
+```
+
+## Gene coordinate table
+
+One table, one place to maintain coordinates -- this replaces the repeated
+per-chromosome `case_when` blocks used earlier, which is what let a
+chromosome typo (`SUPER_7` vs `SUPER_1`) and a mislabeled range (TLR7 vs
+TLR15) slip through undetected. With everything in a single table, a typo
+here breaks obviously (e.g. an empty result for that gene) rather than
+silently mislabeling another gene's hits.
+
+```{r}
+genes <- data.frame(
+  gene   = c("TLR1A", "TLR1B", "TLR2A", "TLR2B", "TLR3-1", "TLR3-2", "TLR3-3", "TLR3-4",
+             "TLR4-1", "TLR4-2", "TLR4-3", "TLR5", "TLR7", "TLR15", "TLR21"),
+  region = c("SUPER_4:53881681-53884137",
+             "SUPER_4:53873407-53875357",
+             "SUPER_4:32245726-32248107",
+             "SUPER_4:32236631-32238982",   # corrected: was previously swapped with TLR3-1
+             "SUPER_4:20104648-20105088",   # corrected: was previously swapped with TLR2B
+             "SUPER_4:20103611-20103802",
+             "SUPER_4:20100233-20102059",
+             "SUPER_4:20099425-20099652",
+             "SUPER_18:8042591-8042695",
+             "SUPER_18:8041589-8041755",
+             "SUPER_18:8037993-8040252",
+             "SUPER_3:95457095-95459677",
+             "SUPER_1:77572878-77576018",
+             "SUPER_3:116327465-116330056",
+             "SUPER_29:1579922-1582852")
+) %>%
+  separate(region, into = c("chr", "range"), sep = ":") %>%
+  separate(range, into = c("start", "end"), sep = "-", convert = TRUE)
+
+genes
+```
+
+## 1. Read the genotype data
+
+```{r}
+path_to_file <- "C:/Users/shayl/OneDrive - Queen's University/TLRPaper/bedfiles/merged_LD_thinned.bed"
+merged_data <- read.pcadapt(path_to_file, type = "bed")
+```
+
+## 2. Build a group label vector, in the same sample order as the .fam file
+
+pcadapt doesn't carry sample IDs through internally, so the group vector
+you build here MUST be in the exact same row order as the .fam file used
+above, or every downstream label will be wrong.
+
+```{r}
+fam_path <- "C:/Users/shayl/OneDrive - Queen's University/TLRPaper/bedfiles/merged_LD_thinned.fam"
+fam <- read.table(fam_path, stringsAsFactors = FALSE)
+colnames(fam)[1:2] <- c("FID", "IID")
+
+meta <- read_excel("sample_metadata.xlsx", sheet = "depth_summary")
+
+# the .fam IDs have the trailing "_trimmed_sorted_minq20" stripped relative
+# to the metadata IDs (same issue as the --keep files earlier) -- strip it
+# here too so the join matches
+meta <- meta %>%
+  mutate(IID = sub("_trimmed_sorted_minq20$", "", IID))
+
+# join in fam order (do NOT sort/reorder -- must match the bed file row order)
+poplist <- fam %>%
+  left_join(meta, by = "IID") %>%
+  pull(group)
+
+# sanity checks before trusting anything downstream
+stopifnot(nrow(fam) == length(poplist))
+sum(is.na(poplist))          # should be 0 -- any NA means an unmatched sample
+table(poplist)               # should read ~39 deceased / ~31 survivor
+```
+
+If `sum(is.na(poplist))` is not 0, stop here and fix the ID matching before
+going further -- an NA in `poplist` means that sample's group is unknown and
+everything downstream (coloring, PC-group tests, outlier calls) will be
+misaligned.
+
+## 3. Choose K
+
+```{r}
+x <- pcadapt(input = merged_data, K = 20)
+plot(x, option = "screeplot")
+```
+
+Pick K just past the "elbow" as before. For a two-group comparison you want
+enough PCs to have a decent chance of capturing a survival-related axis, but
+not so many that you're just fitting noise -- K = 4-6 is a reasonable start;
+adjust based on the screeplot.
+
+```{r}
+K_final <- 4   # <-- set based on your screeplot
+y <- pcadapt(input = merged_data, K = K_final, method = "componentwise")
+summary(y)
+```
+
+## 4. Find which PC (if any) separates deceased from survivors
+
+`get.pc()` isn't needed here -- we can pull PC scores directly from the
+pcadapt object (`y$scores`) and test each one against group.
+
+```{r}
+scores <- as.data.frame(y$scores)
+colnames(scores) <- paste0("PC", 1:K_final)
+scores$group <- poplist
+
+# quick visual check
+plot(x, option = "scores", pop = poplist)
+plot(x, i = 3, j = 4, option = "scores", pop = poplist)
+
+# formal check: does each PC differ by group?
+for (i in 1:K_final) {
+  pc_col <- paste0("PC", i)
+  test <- wilcox.test(scores[[pc_col]] ~ scores$group)
+  cat(pc_col, "- p =", test$p.value, "\n")
+}
+```
+
+Look for the PC(s) with a small p-value here -- that's your candidate
+survival-associated axis. If none of the PCs separate the groups at all,
+that itself is a real (if less exciting) result: it suggests deceased and
+survivors aren't strongly differentiated on the axes pcadapt is picking up,
+and a global genome scan may not be the most sensitive way to detect
+selection here (an Fst-based scan targeted at your TLR windows specifically
+may still be worth doing regardless).
+
+## 5. Componentwise outlier test on the survival-associated PC
+
+Suppose PC2 came out significant above -- adjust `survival_pc` to whichever
+PC number was actually significant in your output.
+
+```{r}
+survival_pc <- 2   # <-- set this based on step 4's results
+
+pvals_pc <- y$pvalues[, survival_pc]
+
+library(qvalue)
+qval <- qvalue(pvals_pc)$qvalues
+alpha <- 0.05
+merged_outliers <- which(qval < alpha)
+length(merged_outliers)
+
+merged_outliers <- as.data.frame(merged_outliers)
+write.csv(merged_outliers, file = "merged_outliers_componentwise.csv")
+```
+
+## 6. Match outliers back to variant positions
+
+Same rule as before: match against the .bim file that was actually used in
+this pcadapt run (`merged_LD_thinned.bim`), not any other bed/bim file.
+
+```{bash}
+cut -d',' -f2 merged_outliers_componentwise.csv > merged_outliers.txt
+sed -i '1d' merged_outliers.txt
+dos2unix merged_outliers.txt
+
+awk 'NR==FNR{line[$1]; next} FNR in line' merged_outliers.txt merged_LD_thinned.bim > merged_outliers_pcadapt.txt
+```
+
+## 7. Filter to TLR positions of interest
+
+Instead of one hand-written filter block per chromosome, this does a single
+range join against the `genes` table above: any outlier SNP whose chr+pos
+falls inside a gene's start-end window gets that gene's label attached.
+Adding, correcting, or removing a gene now only requires editing the
+`genes` table -- there's no separate filtering logic to keep in sync with it.
+
+```{r}
+merged_hits <- read.table("merged_outliers_pcadapt.txt") %>%
+  select(c(1, 4, 5, 6)) %>%
+  rename(chr = V1, pos = V4, base_before = V5, base_after = V6) %>%
+  mutate(start = pos, end = pos)   # single-position "range" so genome_join can compare it to gene windows
+
+combined_merged_outliers <- genome_left_join(
+  merged_hits, genes,
+  by = c("chr", "start", "end")
+) %>%
+  filter(!is.na(gene)) %>%          # keep only SNPs that actually fall inside a TLR window
+  select(chr = chr.x, pos, base_before, base_after, gene)
+
+write.csv(combined_merged_outliers, file = "pcadapt_merged_tlr_outliers.csv")
+combined_merged_outliers
+```
+
+Sanity check worth running once: confirm every gene in the `genes` table
+that you expect to see hits for is at least *capable* of appearing (i.e. no
+gene silently vanishes because of a typo in its `region` string):
+
+```{r}
+genes$gene[!genes$gene %in% combined_merged_outliers$gene]   # genes with zero outliers in this run -- expected for most, just eyeball for anything suspicious
+```

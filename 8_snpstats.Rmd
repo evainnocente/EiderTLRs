@@ -67,9 +67,6 @@ snpmatrix <- data$genotypes
 # confirm unique sample IDs
 length(unique(rownames(snpmatrix))) == length(rownames(snpmatrix))
 
-# remove any known problem samples here, e.g.:
-# snpmatrix <- snpmatrix[rownames(snpmatrix) != "sample_31", , drop = FALSE]
-
 
 ## ---- 6. Load phenotype/batch data ----
 pheno <- read.csv("snpstatsphenotypes.csv", row.names = 1,
@@ -84,9 +81,6 @@ pheno$batch <- as.factor(pheno$batch)
 ## ---- 7. Align phenotype sample IDs to match snpmatrix ----
 rownames(pheno) <- gsub("\\.", "_", rownames(pheno))
 rownames(pheno) <- sub("_trimmed_sorted_minq20$", "", rownames(pheno))
-
-# remove matching problem samples from pheno too, e.g.:
-# pheno <- pheno[rownames(pheno) != "sample_31", , drop = FALSE]
 
 # confirm alignment
 sum(rownames(pheno) %in% rownames(snpmatrix))
@@ -133,8 +127,8 @@ write.table(signifp, "significantsnps.txt", row.names = FALSE)
 
 # Genes of interest, as chr:start-end
 genes <- data.frame(
-  gene = c("TLR1A", "TLR1B", "TLR2A", "TLR2B", "TLR3-1", "TLR3-2", "TLR3-3",
-           "TLR3-4", "TLR4-1", "TLR4-2", "TLR4-3", "TLR5", "TLR7", "TLR15", "TLR21"),
+  gene = c("TLR1A", "TLR1B", "TLR2A", "TLR2B", "TLR3-exon1", "TLR3-exon2", "TLR3-exon3",
+           "TLR3-exon4", "TLR4-exon1", "TLR4-exon2", "TLR4-exon3", "TLR5", "TLR7", "TLR15", "TLR21"),
   region = c("SUPER_4:53881681-53884137", "SUPER_4:53873407-53875357",
              "SUPER_4:32245726-32248107", "SUPER_4:32236631-32238982",
              "SUPER_4:20103611-20103802", "SUPER_4:20100233-20102059",

@@ -94,7 +94,7 @@ not so many that you're just fitting noise -- K = 4-6 is a reasonable start;
 adjust based on the screeplot.
 
 ```{r}
-K_final <- 8   # <-- set based on your screeplot
+K_final <- 6   # <-- set based on your screeplot
 y <- pcadapt(input = merged_data, K = K_final, method = "componentwise")
 summary(y)
 ```

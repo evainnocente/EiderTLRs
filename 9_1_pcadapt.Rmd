@@ -3,10 +3,6 @@ title: "pcadapt - combined deceased/survivor run"
 output: html_notebook
 ---
 
-This uses the already-built LD-thinned, un-split dataset (`merged_LD_thinned`)
-so pcadapt sees both groups together. We then check which PC (if any)
-separates deceased from survivors.
-
 ```{r}
 library(pcadapt)
 library(dplyr)

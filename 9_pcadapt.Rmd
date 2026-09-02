@@ -101,9 +101,6 @@ summary(y)
 
 ## 4. Find which PC (if any) separates deceased from survivors
 
-`get.pc()` isn't needed here -- we can pull PC scores directly from the
-pcadapt object (`y$scores`) and test each one against group.
-
 ```{r}
 scores <- as.data.frame(y$scores)
 colnames(scores) <- paste0("PC", 1:K_final)
@@ -184,12 +181,6 @@ awk 'NR==FNR{line[$1]; next} FNR in line' merged_outliers.txt merged_LD_thinned.
 ```
 
 ## 7. Filter to TLR positions of interest
-
-Instead of one hand-written filter block per chromosome, this does a single
-range join against the `genes` table above: any outlier SNP whose chr+pos
-falls inside a gene's start-end window gets that gene's label attached.
-Adding, correcting, or removing a gene now only requires editing the
-`genes` table -- there's no separate filtering logic to keep in sync with it.
 
 ```{r}
 merged_hits <- read.table("merged_outliers_pcadapt.txt") %>%

@@ -26,8 +26,8 @@ genes <- data.frame(
   region = c("SUPER_4:53881681-53884137",
              "SUPER_4:53873407-53875357",
              "SUPER_4:32245726-32248107",
-             "SUPER_4:32236631-32238982",   # corrected: was previously swapped with TLR3-1
-             "SUPER_4:20104648-20105088",   # corrected: was previously swapped with TLR2B
+             "SUPER_4:32236631-32238982",  
+             "SUPER_4:20104648-20105088",  
              "SUPER_4:20103611-20103802",
              "SUPER_4:20100233-20102059",
              "SUPER_4:20099425-20099652",
@@ -79,14 +79,8 @@ poplist <- fam %>%
 # sanity checks before trusting anything downstream
 stopifnot(nrow(fam) == length(poplist))
 sum(is.na(poplist))          # should be 0 -- any NA means an unmatched sample
-table(poplist)               # should read ~39 deceased / ~31 survivor
+table(poplist)              
 ```
-
-If `sum(is.na(poplist))` is not 0, stop here and fix the ID matching before
-going further -- an NA in `poplist` means that sample's group is unknown and
-everything downstream (coloring, PC-group tests, outlier calls) will be
-misaligned.
-
 ## 3. Choose K
 
 ```{r}

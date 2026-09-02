@@ -8,7 +8,7 @@
 ##############################################################################
 
 ## ---- USER SETTINGS --------------------------------------------------------
-vcf_path     <- "./phased_reheadered_filtered_sorted_coeigwas_all_updated.vcf.gz"          # path to your VCF file
+vcf_path     <- "./phased_reheadered_filtered_sorted.vcf.gz"          # path to your VCF file
 popmap_path  <- "popmap.txt"         # 2-column, no header: IndividualID  PopulationID
 out_prefix   <- "outflank"           # prefix for output files
 LeftTrimFrac  <- 0.05                # OutFLANK defaults - adjust if needed

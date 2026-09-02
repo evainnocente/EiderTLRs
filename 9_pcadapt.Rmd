@@ -19,13 +19,6 @@ library(IRanges)
 
 ## Gene coordinate table
 
-One table, one place to maintain coordinates -- this replaces the repeated
-per-chromosome `case_when` blocks used earlier, which is what let a
-chromosome typo (`SUPER_7` vs `SUPER_1`) and a mislabeled range (TLR7 vs
-TLR15) slip through undetected. With everything in a single table, a typo
-here breaks obviously (e.g. an empty result for that gene) rather than
-silently mislabeling another gene's hits.
-
 ```{r}
 genes <- data.frame(
   gene   = c("TLR1A", "TLR1B", "TLR2A", "TLR2B", "TLR3-exon1", "TLR3-exon2", "TLR3-exon3", "TLR3-exon4",

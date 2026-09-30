@@ -16,7 +16,7 @@ bcftools mpileup -a AD,ADF,DP,ADR,SP -Ou -f ./ref_genome/ref_genome.fa \
 
 module load vcftools
 
-vcftools --vcf filename.vcf --minDP 5 --maxDP 200 --max-missing 0.9 --maf 0.05 --minQ 20 --remove-indels --remove-filtered-all --recode --recode-INFO-all --out filtered_filename
+vcftools --vcf filename.vcf --minDP 5 --maxDP 200 --max-missing 0.9 --maf 0.01 --minQ 20 --remove-indels --remove-filtered-all --recode --recode-INFO-all --out filtered_filename
 
 
 ## Reheader samples in .vcf file to correct sample names with bcftools reheader
